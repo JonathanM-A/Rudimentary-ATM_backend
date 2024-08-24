@@ -16,16 +16,6 @@ class BankAccount:
         self.balance = balance
 
     @classmethod
-    def create_table(cls):
-        cur = cls.conn.cursor()
-        cur.execute(
-            f"CREATE  TABLE IF NOT EXISTS bank_accounts (id SERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL, pin VARCHAR(4) NOT NULL,
-            balance FLOAT NOT NULL)"
-        )
-        cls.conn.commit()
-        cur.close()
-
-    @classmethod
     def open_account(cls, name, pin, initial_deposit: float):
         cls.connect_to_db()
         cur = cls.conn.cursor()
@@ -51,22 +41,28 @@ class BankAccount:
                 print(f"Unable to connect to database: {e}")
 
     @classmethod
+    def create_table(cls):
+        cls.connect_to_db()
+        cur = cls.conn.cursor()
+        cur.execute(
+            f"CREATE  TABLE IF NOT EXISTS bank_accounts (id SERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL, pin VARCHAR(4) NOT NULL, balance FLOAT NOT NULL)"
+        )
+        cls.conn.commit()
+        cur.close()
+
+    @classmethod
     def check_account(cls, name, pin):
         cur = cls.conn.cursor()
-        cur.execute("SELECT name, pin WHERE name = %s and pin = %s", (name, pin))
+        cur.execute("SELECT name, pin, balance FROM bank_accounts WHERE name = %s and pin = %s", (name, pin))
         account_info = cur.fetchall()
         cur.close()
         return account_info
 
+    def check_balance(self):
+        print(f"Your balance is GHS{'%.2f' % self.balance}")
+
     def deposit(self, amount: float):
         self.balance += amount
-        return self.balance
-
-    def withdraw(self, amount: float):
-        if amount < self.balance:
-            self.balance -= amount
-        else:
-            print("Insufficient balance")
         return self.balance
 
     def update(self):
@@ -78,8 +74,12 @@ class BankAccount:
         self.conn.commit()
         cur.close()
 
-    def check_balance(self):
-        return f"Your balance is GHS{self.balance}"
+    def withdraw(self, amount: float):
+        if amount < self.balance:
+            self.balance -= amount
+        else:
+            print("Insufficient balance")
+        return self.balance
 
     @staticmethod
     def exit():
@@ -91,51 +91,54 @@ class BankAccount:
 
 
 def main():
-    print("Welcome to KAMAJ Bank")
+    print("\nWelcome to KAMAJ Bank")
     BankAccount.create_table()
-    while True:
-        try:
-            option = int(
-                input(
-                    "What would you like to do?\n\
-                        1. Open an account\n\
-                        2. Make a transaction\n\
-                        3. Exit\n\
-                    Enter option: "
-                )
+    try:
+        option = int(
+            input(
+                """
+                1. Open an account
+                2. Make a transaction
+                3. Exit
+                Enter option:
+                """
             )
+        )
 
-            if option == 1:
-                name = input("Enter your name: ")
-                pin = input("Enter your PIN (4 digits)")
+        if option == 1:
+            name = input("Enter your name: ")
+            pin = input("Enter your PIN (4 digits)")
+            pin_verify = re.search(r"^\d{4}$", pin)
+            while not pin_verify:
+                pin = input("Your PIN must be 4 digits. Enter your PIN: ")
                 pin_verify = re.search(r"^\d{4}$", pin)
-                while not pin_verify:
-                    pin = input("Your PIN must be 4 digits. Enter your PIN: ")
-                    pin_verify = re.search(r"^\d{4}$", pin)
-                initial_deposit = input("Enter amount to deposit: ")
+            initial_deposit = input("Enter amount to deposit: ")
+            deposit_verify = re.search(r"^\d+\.?\d{,2}$", initial_deposit)
+            while not deposit_verify:
+                initial_deposit = input("Please enter a valid amount: ")
                 deposit_verify = re.search(r"^\d+\.?\d{,2}$", initial_deposit)
-                while not deposit_verify:
-                    initial_deposit = input("Please enter a valid amount: ")
-                    deposit_verify = re.search(r"^\d+\.?\d{,2}$", initial_deposit)
-                initial_deposit = float(initial_deposit)
-                BankAccount.open_account(name, pin, initial_deposit)
+            initial_deposit = float(initial_deposit)
+            BankAccount.open_account(name, pin, initial_deposit)
 
-            elif option == 2:
-                name = "Enter your name: "
-                pin = "Enter your PIN: "
-                client_verify = BankAccount.check_account(name, pin)
-                if client_verify:
-                    for name, pin, balance in client_verify:
-                        client = BankAccount(name, pin, balance)
-                    print(f"Welcome {name.title()}")
-
+        elif option == 2:
+            name = input("Enter your name: ")
+            pin = input("Enter your PIN: ")
+            client_verify = BankAccount.check_account(name.lower(), pin)
+            if client_verify:
+                for name, pin, balance in client_verify:
+                    client = BankAccount(name, pin, balance)
+                print(f"Welcome {name.title()}")
+            
+                while True:
                     transaction = int(
                         input(
-                            "1. DEPOSIT\n\
-                                        2. WITHDRAWAL\n\
-                                        3. CHECK BALANCE\n\
-                                        4. CANCEL TRANSACTION\n\
-                                        Enter option: "
+                            """
+                            1. DEPOSIT\n\
+                            2. WITHDRAWAL\n\
+                            3. CHECK BALANCE\n\
+                            4. EXIT\n\
+                            Enter option:
+                            """
                         )
                     )
                     if transaction == 1:
@@ -157,22 +160,25 @@ def main():
                         client.check_balance()
 
                     elif transaction == 4:
-                        continue
+                        pass
 
                     else:
                         print("Enter a valid option")
 
                     if client.exit():
+                        print("Goodbye!")
                         break
-                else:
-                    print("Account not found.")
+            else:
+                print("Account not found.")
 
-            elif option == 3:
-                print("Goodbye!")
-                break
+        elif option == 3:
+            print("Goodbye!")
+        
+        else:
+            print("Enter a valid option")
 
-        except ValueError:
-            print("Enter valid option")
+    except ValueError:
+        print("Enter valid option")
 
 
 main()
